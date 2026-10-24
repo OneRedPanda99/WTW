@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
+  { href: "/", label: "For You", icon: "✨" },
   { href: "/swipe", label: "Swipe", icon: "🃏" },
   { href: "/together", label: "Together", icon: "💑" },
   { href: "/watchlist", label: "Watchlist", icon: "🍿" },
@@ -35,12 +36,12 @@ export default function Nav() {
         </nav>
       </header>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-zinc-800 bg-zinc-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-zinc-800 bg-zinc-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
         {LINKS.map((l) => (
           <Link
             key={l.href}
             href={l.href}
-            className={`flex flex-col items-center py-2 text-xs ${isActive(l.href) ? "text-amber-400" : "text-zinc-400"}`}
+            className={`flex flex-col items-center py-2 text-[11px] ${isActive(l.href) ? "text-amber-400" : "text-zinc-400"}`}
           >
             <span className="text-lg leading-none">{l.icon}</span>
             {l.label}

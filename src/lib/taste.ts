@@ -74,6 +74,13 @@ const TV_GENRES: Record<string, string[]> = {
 };
 export const normalizeGenre = (g: string) => TV_GENRES[g] ?? [g];
 
+/** Average "how much do you like this genre" per rated title, over the title's genres. Roughly -2 … 4. */
+export function genreFit(taste: TasteProfile, genres: string[]) {
+  if (taste.ratedCount === 0 || genres.length === 0) return 0;
+  const vals = genres.map((g) => (taste.weights[`genre:${g}`] ?? 0) / taste.ratedCount);
+  return (vals.reduce((a, b) => a + b, 0) / vals.length) * 2;
+}
+
 // TMDB keywords that describe the release, not the story.
 const JUNK_KEYWORDS = new Set([
   "aftercreditsstinger",

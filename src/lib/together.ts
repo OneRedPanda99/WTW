@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeTaste, normalizeGenre, type TasteProfile } from "./taste";
+import { computeTaste, genreFit, normalizeGenre, type TasteProfile } from "./taste";
 import { genreNames, popularPool, recommendationsFor, titleDetails } from "./tmdb";
 import type { MediaItem, MediaType, Rating } from "./types";
 
@@ -146,13 +146,6 @@ async function loadMember(supabase: SupabaseClient, member: Member): Promise<Mem
     ratings: new Map((r.data ?? []).map((x) => [key(x.tmdb_id, x.media_type), { rating: x.rating as Rating, title: x.title }])),
     watchlist: new Set((w.data ?? []).map((x) => key(x.tmdb_id, x.media_type))),
   };
-}
-
-/** Average "how much do you like this genre" per rated title, over the title's genres. Roughly -1 … 2. */
-function genreFit(taste: TasteProfile, genres: string[]) {
-  if (taste.ratedCount === 0 || genres.length === 0) return 0;
-  const vals = genres.map((g) => (taste.weights[`genre:${g}`] ?? 0) / taste.ratedCount);
-  return (vals.reduce((a, b) => a + b, 0) / vals.length) * 2;
 }
 
 function reasonsFor(

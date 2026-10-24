@@ -1,50 +1,102 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import Poster from "@/components/Poster";
+import RateButtons from "@/components/RateButtons";
+import { recommendFor } from "@/lib/forYou";
 import { requireUser } from "@/lib/supabase/server";
+import type { MediaType } from "@/lib/types";
 
-export default async function Home() {
+export const metadata = { title: "For You · WTW?" };
+
+const MIN_RATINGS = 5;
+
+export default async function ForYouPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
+  const { type: rawType } = await searchParams;
+  const type = (rawType === "movie" || rawType === "tv" ? rawType : "all") as MediaType | "all";
   const { supabase, user } = await requireUser();
 
-  const [{ data: profile }, ratings, watchlist] = await Promise.all([
+  const [{ data: profile }, ratings] = await Promise.all([
     supabase.from("profiles").select("display_name").eq("id", user.id).single(),
     supabase.from("ratings").select("*", { count: "exact", head: true }).eq("user_id", user.id),
-    supabase.from("watchlist").select("*", { count: "exact", head: true }).eq("user_id", user.id),
   ]);
+  const ratedCount = ratings.count ?? 0;
+
+  const tabs = [
+    { value: "all", label: "All" },
+    { value: "movie", label: "Movies" },
+    { value: "tv", label: "TV" },
+  ];
 
   return (
-    <div className="py-6">
-      <h1 className="text-3xl font-black tracking-tight">Hey {profile?.display_name ?? "there"} 👋</h1>
-      <p className="mt-1 text-zinc-400">
-        {ratings.count ?? 0} rated · {watchlist.count ?? 0} on your watchlist
-      </p>
-
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        <HomeCard href="/swipe" emoji="🃏" title="Swipe" text="Rate titles fast so WTW learns your taste. Come back any time." accent />
-        <HomeCard href="/watchlist" emoji="🍿" title="Watchlist" text="Stuff you want to see. Log it once you've watched it." />
-        <HomeCard href="/search" emoji="🔎" title="Search" text="Find a specific movie or show to rate or save." />
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">For you</h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Hey {profile?.display_name ?? "there"}. Picked from the {ratedCount} things you&apos;ve rated, mostly what you
+            loved.
+          </p>
+        </div>
+        <nav className="flex gap-1 text-sm">
+          {tabs.map((t) => (
+            <Link
+              key={t.value}
+              href={t.value === "all" ? "/" : `/?type=${t.value}`}
+              className={`rounded-full px-3 py-1 ${type === t.value ? "bg-zinc-100 text-zinc-950" : "bg-zinc-900 text-zinc-400"}`}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
       </div>
 
-      <Link
-        href="/together"
-        className="mt-4 block rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 transition hover:-translate-y-0.5 hover:bg-zinc-900"
-      >
-        <h2 className="text-lg font-bold">💑 Watch together</h2>
-        <p className="mt-1 text-sm text-zinc-400">Pick who&apos;s watching and get things you&apos;ll all like.</p>
-      </Link>
+      {ratedCount < MIN_RATINGS ? (
+        <div className="mt-8 rounded-2xl border border-amber-400/40 bg-amber-400/10 p-6">
+          <p className="font-semibold">Rate a few more things first</p>
+          <p className="mt-1 text-sm text-zinc-300">
+            WTW needs at least {MIN_RATINGS} ratings to know your taste (you have {ratedCount}). A couple of minutes of
+            swiping is plenty.
+          </p>
+          <Link
+            href="/swipe"
+            className="mt-4 inline-block rounded-lg bg-amber-400 px-4 py-2 font-semibold text-zinc-950 hover:bg-amber-300"
+          >
+            Start swiping
+          </Link>
+        </div>
+      ) : (
+        <Suspense key={type} fallback={<p className="mt-8 animate-pulse text-zinc-400">Finding things you&apos;ll love…</p>}>
+          <Recommendations userId={user.id} type={type} />
+        </Suspense>
+      )}
     </div>
   );
 }
 
-function HomeCard({ href, emoji, title, text, accent }: { href: string; emoji: string; title: string; text: string; accent?: boolean }) {
+async function Recommendations({ userId, type }: { userId: string; type: MediaType | "all" }) {
+  const { supabase } = await requireUser();
+  const recs = await recommendFor(supabase, userId, type).catch(() => null);
+
+  if (!recs) return <p className="mt-8 text-red-400">Couldn&apos;t load recommendations. Try refreshing.</p>;
+  if (recs.length === 0) {
+    return <p className="mt-8 text-zinc-400">Nothing new to suggest right now. Rate a few more things and check back.</p>;
+  }
+
   return (
-    <Link
-      href={href}
-      className={`rounded-2xl border p-5 transition hover:-translate-y-0.5 ${
-        accent ? "border-amber-400/50 bg-amber-400/10 hover:bg-amber-400/15" : "border-zinc-800 bg-zinc-900/50 hover:bg-zinc-900"
-      }`}
-    >
-      <div className="text-3xl">{emoji}</div>
-      <h2 className="mt-3 text-lg font-bold">{title}</h2>
-      <p className="mt-1 text-sm text-zinc-400">{text}</p>
-    </Link>
+    <ul className="mt-6 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
+      {recs.map(({ item, reasons }) => (
+        <li key={`${item.media_type}:${item.id}`} className="flex flex-col">
+          <Poster path={item.poster_path} title={item.title} sizes="(max-width: 640px) 50vw, 200px" />
+          <p className="mt-2 font-semibold leading-tight">{item.title}</p>
+          <p className="text-xs text-zinc-500">
+            {item.year ?? "—"} · {item.media_type === "tv" ? "TV" : "Movie"} · ★ {item.vote_average.toFixed(1)}
+          </p>
+          {reasons.length > 0 && <p className="mt-1 line-clamp-2 text-xs text-amber-300/90">{reasons.join(" · ")}</p>}
+          <div className="mt-2">
+            <RateButtons compact item={item} />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
