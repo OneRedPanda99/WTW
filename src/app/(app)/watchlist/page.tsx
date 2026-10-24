@@ -41,9 +41,9 @@ export default async function WatchlistPage() {
           .
         </div>
       ) : (
-        <ul className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {items.map((i) => (
-            <li key={`${i.media_type}:${i.tmdb_id}`} className="flex flex-col">
+        <ul className="stagger mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {items.map((i, n) => (
+            <li key={`${i.media_type}:${i.tmdb_id}`} className="flex flex-col" style={{ "--i": n } as React.CSSProperties}>
               <Poster path={i.poster_path} title={i.title} sizes="(max-width: 640px) 50vw, 240px" />
               <p className="mt-2 font-medium leading-tight">{i.title}</p>
               <p className="text-xs text-zinc-500">{i.media_type === "tv" ? "TV" : "Movie"}</p>

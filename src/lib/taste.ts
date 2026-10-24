@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchFeatures } from "./tmdb";
 import type { MediaType, Rating, TitleFeatures } from "./types";
@@ -25,8 +26,10 @@ const NOT_INTERESTED_WEIGHT = -0.5;
  *
  * Each title adds its weight (-1 / +1 / +2, or -0.5 for "not for me") to every
  * feature it has. Counts only include titles you actually watched.
+ *
+ * Cached per page render, since several parts of a page can ask for the same profile.
  */
-export async function computeTaste(supabase: SupabaseClient, userId: string): Promise<TasteProfile> {
+export const computeTaste = cache(async (supabase: SupabaseClient, userId: string): Promise<TasteProfile> => {
   const [{ data: ratings }, { data: passes }] = await Promise.all([
     supabase.from("ratings").select("tmdb_id, media_type, rating").eq("user_id", userId),
     supabase.from("not_interested").select("tmdb_id, media_type").eq("user_id", userId),
@@ -77,7 +80,7 @@ export async function computeTaste(supabase: SupabaseClient, userId: string): Pr
     decades: group("decade:", 1),
     weights: Object.fromEntries([...tally.entries()].map(([k, v]) => [k, v.score])),
   };
-}
+});
 
 const round = (n: number) => Math.round(n * 10) / 10;
 

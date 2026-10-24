@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Refreshes the Supabase session on every request and sends signed-out visitors to /login.
+// Keeps the Supabase session fresh on every request and sends signed-out visitors to /login.
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -24,12 +24,11 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() verifies the token locally (and refreshes it when it's about to expire).
+  const { data } = await supabase.auth.getClaims();
 
   const path = request.nextUrl.pathname;
-  if (!user && !path.startsWith("/login")) {
+  if (!data?.claims?.sub && !path.startsWith("/login")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

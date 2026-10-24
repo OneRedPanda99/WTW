@@ -8,12 +8,17 @@ type Props = {
   onWatchlist: boolean;
   /** Extra line under the title, e.g. a role or "why we picked this". */
   note?: React.ReactNode;
+  /** Position in the list, for the staggered entrance animation. */
+  index?: number;
 };
 
 /** A movie / show in a list, with rate + watchlist buttons. */
-export default function TitleRow({ item, rating, onWatchlist, note }: Props) {
+export default function TitleRow({ item, rating, onWatchlist, note, index = 0 }: Props) {
   return (
-    <li className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+    <li
+      style={{ "--i": index } as React.CSSProperties}
+      className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 transition-colors duration-200 hover:border-zinc-700 hover:bg-zinc-900"
+    >
       <Poster path={item.poster_path} title={item.title} size="w185" className="w-20 shrink-0" sizes="80px" />
       <div className="min-w-0 flex-1">
         <p className="font-semibold">

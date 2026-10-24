@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { PosterGridSkeleton } from "@/components/Skeletons";
 import { recommendFor } from "@/lib/forYou";
 import { requireUser } from "@/lib/supabase/server";
 import type { MediaType } from "@/lib/types";
@@ -64,7 +65,15 @@ export default async function ForYouPage({ searchParams }: { searchParams: Promi
           </Link>
         </div>
       ) : (
-        <Suspense key={type} fallback={<p className="mt-8 animate-pulse text-zinc-400">Finding things you&apos;ll love…</p>}>
+        <Suspense
+          key={type}
+          fallback={
+            <>
+              <p className="mt-6 animate-pulse text-sm text-zinc-400">Finding things you&apos;ll love…</p>
+              <PosterGridSkeleton />
+            </>
+          }
+        >
           <Recommendations userId={user.id} type={type} />
         </Suspense>
       )}
@@ -82,9 +91,9 @@ async function Recommendations({ userId, type }: { userId: string; type: MediaTy
   }
 
   return (
-    <ul className="mt-6 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
-      {recs.map(({ item, reasons }) => (
-        <RecCard key={`${item.media_type}:${item.id}`} item={item} reasons={reasons} />
+    <ul className="stagger mt-6 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
+      {recs.map(({ item, reasons }, i) => (
+        <RecCard key={`${item.media_type}:${item.id}`} item={item} reasons={reasons} index={i} />
       ))}
     </ul>
   );

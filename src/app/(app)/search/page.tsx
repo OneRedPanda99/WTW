@@ -52,9 +52,9 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       {people.length > 0 && (
         <section className="mt-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">People</h2>
-          <ul className="mt-2 flex gap-3 overflow-x-auto pb-2">
-            {people.map((p) => (
-              <li key={p.id} className="w-28 shrink-0">
+          <ul className="stagger mt-2 flex gap-3 overflow-x-auto pb-2">
+            {people.map((p, i) => (
+              <li key={p.id} className="w-28 shrink-0" style={{ "--i": i } as React.CSSProperties}>
                 <Link href={`/person/${p.id}`} className="group block">
                   <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-zinc-800">
                     {p.profile_path && (
@@ -81,10 +81,12 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           {people.length > 0 && (
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Movies &amp; shows</h2>
           )}
-          <ul className="mt-2 space-y-3">
-            {titles.map((item) => {
+          <ul className="stagger mt-2 space-y-3">
+            {titles.map((item, i) => {
               const k = `${item.media_type}:${item.id}`;
-              return <TitleRow key={k} item={item} rating={ratings.get(k) ?? null} onWatchlist={listed.has(k)} />;
+              return (
+                <TitleRow key={k} index={i} item={item} rating={ratings.get(k) ?? null} onWatchlist={listed.has(k)} />
+              );
             })}
           </ul>
         </section>

@@ -67,11 +67,18 @@ export default async function PersonPage({ params, searchParams }: Params) {
         ))}
       </nav>
 
-      <ul className="mt-4 space-y-3">
-        {credits.slice(0, 60).map((c) => {
+      <ul className="stagger mt-4 space-y-3">
+        {credits.slice(0, 60).map((c, i) => {
           const k = `${c.media_type}:${c.id}`;
           return (
-            <TitleRow key={k} item={c} rating={ratings.get(k) ?? null} onWatchlist={listed.has(k)} note={c.role} />
+            <TitleRow
+              key={k}
+              index={i}
+              item={c}
+              rating={ratings.get(k) ?? null}
+              onWatchlist={listed.has(k)}
+              note={c.role}
+            />
           );
         })}
       </ul>

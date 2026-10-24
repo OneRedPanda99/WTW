@@ -39,15 +39,20 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-4">
-      <h1 className="text-4xl font-black tracking-tight">
-        WTW<span className="text-amber-400">?</span>
+    <main className="relative mx-auto flex min-h-dvh max-w-sm animate-fade-up flex-col justify-center px-4">
+      {/* Soft marquee glow behind the logo. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-1/4 left-1/2 -z-10 h-64 w-64 -translate-x-1/2 animate-pulse rounded-full bg-amber-500/10 blur-3xl [animation-duration:4s]"
+      />
+      <h1 className="text-5xl font-black tracking-tight">
+        WTW<span className="inline-block animate-wiggle text-amber-400 [animation-delay:0.4s]">?</span>
       </h1>
       <p className="mt-2 text-zinc-400">What to watch, figured out together.</p>
 
       {status === "sent" ? (
-        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <p className="font-medium">Check your email.</p>
+        <div className="mt-8 animate-scale-in rounded-xl border border-amber-400/30 bg-zinc-900 p-4">
+          <p className="font-medium">📬 Check your email.</p>
           <p className="mt-1 text-sm text-zinc-400">
             We sent a sign-in link to {email}. It works in any browser on this computer.
           </p>
@@ -67,13 +72,16 @@ export default function LoginPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 outline-none focus:border-amber-400"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 outline-none transition focus:border-amber-400 focus:ring-4 focus:ring-amber-400/10"
             placeholder="you@example.com"
           />
           <button
             disabled={status === "sending"}
-            className="w-full rounded-lg bg-amber-400 py-2.5 font-semibold text-zinc-950 hover:bg-amber-300 disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-400 py-2.5 font-semibold text-zinc-950 shadow-lg shadow-amber-500/20 hover:-translate-y-0.5 hover:bg-amber-300 hover:shadow-amber-500/30 disabled:translate-y-0 disabled:opacity-70"
           >
+            {status === "sending" && (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-950/30 border-t-zinc-950" />
+            )}
             {status === "sending" ? "Sending…" : "Email me a sign-in link"}
           </button>
         </form>

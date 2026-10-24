@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 export async function createClient() {
   const cookieStore = await cookies();
@@ -27,12 +28,17 @@ export async function createClient() {
   );
 }
 
-/** Supabase client plus the signed-in user. Sends to /login if nobody is signed in. */
-export async function requireUser() {
+/**
+ * Supabase client plus the signed-in user. Sends to /login if nobody is signed in.
+ *
+ * Uses getClaims(), which checks the login token locally against the project's
+ * public signing key instead of asking Supabase's servers every time. Wrapped in
+ * cache() so every component in one page render shares a single client and check.
+ */
+export const requireUser = cache(async () => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  return { supabase, user };
-}
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (!claims?.sub) redirect("/login");
+  return { supabase, user: { id: claims.sub, email: (claims.email as string | undefined) ?? "" } };
+});

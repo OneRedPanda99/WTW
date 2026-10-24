@@ -36,7 +36,7 @@ export default async function TogetherPage({ searchParams }: { searchParams: Pro
           {others.map((m) => (
             <label key={m.id} className="cursor-pointer">
               <input type="checkbox" name="with" value={m.id} defaultChecked={withIds.has(m.id)} className="peer sr-only" />
-              <span className="inline-block rounded-full border border-zinc-700 px-3 py-1 text-sm text-zinc-300 peer-checked:border-amber-400 peer-checked:bg-amber-400/15 peer-checked:text-amber-200 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400">
+              <span className="inline-block rounded-full border border-zinc-700 px-3 py-1 text-sm text-zinc-300 transition duration-200 hover:border-zinc-500 active:scale-95 peer-checked:scale-105 peer-checked:border-amber-400 peer-checked:bg-amber-400/15 peer-checked:text-amber-200 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400">
                 {m.name}
               </span>
             </label>
@@ -57,7 +57,7 @@ export default async function TogetherPage({ searchParams }: { searchParams: Pro
             <option value="movie">Movies</option>
             <option value="tv">TV</option>
           </select>
-          <button className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-amber-300">
+          <button className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-950 shadow-lg shadow-amber-500/20 hover:-translate-y-0.5 hover:bg-amber-300 hover:shadow-amber-500/30">
             Find picks
           </button>
         </div>
@@ -69,12 +69,13 @@ export default async function TogetherPage({ searchParams }: { searchParams: Pro
       {picks.length === 0 ? (
         <p className="mt-3 text-zinc-500">No picks yet. Rate a few things on the Swipe page first.</p>
       ) : (
-        <ul className="mt-3 space-y-3">
-          {picks.map(({ item, reasons }) => {
+        <ul className="stagger mt-3 space-y-3">
+          {picks.map(({ item, reasons }, i) => {
             const k = `${item.media_type}:${item.id}`;
             return (
               <TitleRow
                 key={k}
+                index={i}
                 item={item}
                 rating={ratings.get(k) ?? null}
                 onWatchlist={listed.has(k)}
