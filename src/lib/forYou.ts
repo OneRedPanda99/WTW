@@ -78,9 +78,10 @@ export async function recommendFor(
     .slice(0, 45);
 
   // ── pass 2 ──
+  const features = await loadFeatures(supabase, firstPass.map((c) => c.item));
   const detailed = await Promise.all(
     firstPass.map(async (c) => {
-      const f = await fetchFeatures(c.item.id, c.item.media_type).catch(() => null);
+      const f = features.get(c.k);
       const match = f ? featureMatch(taste, f) : { score: 0, person: null, theme: null };
       return { ...c, score: c.score + match.score + Math.random() * 0.4, match };
     }),
@@ -104,6 +105,31 @@ export async function recommendFor(
     if (out.length >= 30) break;
   }
   return out;
+}
+
+/**
+ * Cast / director / themes for each title: one database read for everything we've
+ * seen before, TMDB only for the rest (saved back so next time is instant).
+ */
+async function loadFeatures(supabase: SupabaseClient, items: MediaItem[]) {
+  const map = new Map<string, TitleFeatures>();
+  const { data } = await supabase
+    .from("title_cache")
+    .select("tmdb_id, media_type, data")
+    .in("tmdb_id", items.map((i) => i.id));
+  for (const row of data ?? []) map.set(key(row.tmdb_id, row.media_type), row.data as TitleFeatures);
+
+  const missing = items.filter((i) => !map.has(key(i.id, i.media_type)));
+  const fetched = await Promise.all(
+    missing.map(async (i) => {
+      const f = await fetchFeatures(i.id, i.media_type).catch(() => null);
+      if (f) map.set(key(i.id, i.media_type), f);
+      return f ? { tmdb_id: i.id, media_type: i.media_type, data: f } : null;
+    }),
+  );
+  const rows = fetched.filter((r) => r !== null);
+  if (rows.length) await supabase.from("title_cache").upsert(rows);
+  return map;
 }
 
 /** How well a title's people and themes line up with your taste. */
