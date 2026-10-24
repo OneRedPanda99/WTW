@@ -66,6 +66,19 @@ create table if not exists public.skips (
   primary key (user_id, tmdb_id, media_type)
 );
 
+-- ───────────────────────── not_interested ─────────────────────────
+-- "Not for me": haven't watched it and don't want to. Counts as a mild
+-- negative in the taste profile (half a "didn't like") and is never suggested.
+create table if not exists public.not_interested (
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  tmdb_id     integer not null,
+  media_type  text not null check (media_type in ('movie', 'tv')),
+  title       text not null,
+  poster_path text,
+  created_at  timestamptz not null default now(),
+  primary key (user_id, tmdb_id, media_type)
+);
+
 -- ───────────────────────── title_cache ─────────────────────────
 -- Shared cache of TMDB features (genres, keywords, people) used to build taste profiles.
 create table if not exists public.title_cache (
@@ -81,6 +94,7 @@ alter table public.profiles    enable row level security;
 alter table public.ratings     enable row level security;
 alter table public.watchlist   enable row level security;
 alter table public.skips       enable row level security;
+alter table public.not_interested enable row level security;
 alter table public.title_cache enable row level security;
 
 -- Profiles: everyone signed in can see names (needed for pairing later); you edit only yours.
@@ -110,6 +124,14 @@ create policy "watchlist write own" on public.watchlist
 -- Skips: private.
 drop policy if exists "skips own" on public.skips;
 create policy "skips own" on public.skips
+  for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Not interested: readable by all signed-in users (so group picks can avoid it), writable only by owner.
+drop policy if exists "not_interested read" on public.not_interested;
+create policy "not_interested read" on public.not_interested
+  for select to authenticated using (true);
+drop policy if exists "not_interested write own" on public.not_interested;
+create policy "not_interested write own" on public.not_interested
   for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Title cache: shared by everyone signed in.

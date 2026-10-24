@@ -29,12 +29,14 @@ async function ensureFeatures(supabase: Supabase, id: number, type: MediaType) {
   }
 }
 
-function refresh() {
-  revalidatePath("/", "layout");
+/** Re-render the current page with fresh data. Skipped with `quiet` where the page updates itself (For You, Swipe). */
+type Opts = { quiet?: boolean };
+function refresh(opts?: Opts) {
+  if (!opts?.quiet) revalidatePath("/", "layout");
 }
 
 /** Log that you watched something and how you felt. Removes it from the watchlist. */
-export async function rateTitle(item: TitleRef, rating: Rating) {
+export async function rateTitle(item: TitleRef, rating: Rating, opts?: Opts) {
   const { supabase, user } = await requireUser();
   const match = { user_id: user.id, tmdb_id: item.id, media_type: item.media_type };
 
@@ -50,9 +52,32 @@ export async function rateTitle(item: TitleRef, rating: Rating) {
   await Promise.all([
     supabase.from("watchlist").delete().match(match),
     supabase.from("skips").delete().match(match),
+    supabase.from("not_interested").delete().match(match),
     ensureFeatures(supabase, item.id, item.media_type),
   ]);
-  refresh();
+  refresh(opts);
+}
+
+/** "Not for me": haven't watched it, don't want to. Counts as a mild negative in your taste. */
+export async function markNotInterested(item: TitleRef, opts?: Opts) {
+  const { supabase, user } = await requireUser();
+  const match = { user_id: user.id, tmdb_id: item.id, media_type: item.media_type };
+  const { error } = await supabase
+    .from("not_interested")
+    .upsert({ ...match, title: item.title, poster_path: item.poster_path });
+  if (error) throw new Error(error.message);
+  await Promise.all([
+    supabase.from("watchlist").delete().match(match),
+    supabase.from("skips").delete().match(match),
+    ensureFeatures(supabase, item.id, item.media_type),
+  ]);
+  refresh(opts);
+}
+
+export async function removeNotInterested(id: number, type: MediaType, opts?: Opts) {
+  const { supabase, user } = await requireUser();
+  await supabase.from("not_interested").delete().match({ user_id: user.id, tmdb_id: id, media_type: type });
+  refresh(opts);
 }
 
 /** "Haven't seen it" on the swipe deck. */
@@ -61,7 +86,7 @@ export async function skipTitle(item: TitleRef) {
   await supabase.from("skips").upsert({ user_id: user.id, tmdb_id: item.id, media_type: item.media_type });
 }
 
-export async function addToWatchlist(item: TitleRef) {
+export async function addToWatchlist(item: TitleRef, opts?: Opts) {
   const { supabase, user } = await requireUser();
   const { error } = await supabase.from("watchlist").upsert({
     user_id: user.id,
@@ -71,31 +96,33 @@ export async function addToWatchlist(item: TitleRef) {
     poster_path: item.poster_path,
   });
   if (error) throw new Error(error.message);
-  refresh();
+  await supabase.from("not_interested").delete().match({ user_id: user.id, tmdb_id: item.id, media_type: item.media_type });
+  refresh(opts);
 }
 
-export async function removeFromWatchlist(id: number, type: MediaType) {
+export async function removeFromWatchlist(id: number, type: MediaType, opts?: Opts) {
   const { supabase, user } = await requireUser();
   await supabase.from("watchlist").delete().match({ user_id: user.id, tmdb_id: id, media_type: type });
-  refresh();
+  refresh(opts);
 }
 
-export async function removeRating(id: number, type: MediaType) {
+export async function removeRating(id: number, type: MediaType, opts?: Opts) {
   const { supabase, user } = await requireUser();
   await supabase.from("ratings").delete().match({ user_id: user.id, tmdb_id: id, media_type: type });
-  refresh();
+  refresh(opts);
 }
 
 /** Undo for the swipe deck: forget whatever we recorded for this title. */
-export async function clearTitle(id: number, type: MediaType) {
+export async function clearTitle(id: number, type: MediaType, opts?: Opts) {
   const { supabase, user } = await requireUser();
   const match = { user_id: user.id, tmdb_id: id, media_type: type };
   await Promise.all([
     supabase.from("ratings").delete().match(match),
     supabase.from("watchlist").delete().match(match),
     supabase.from("skips").delete().match(match),
+    supabase.from("not_interested").delete().match(match),
   ]);
-  refresh();
+  refresh(opts);
 }
 
 /**
@@ -113,16 +140,17 @@ export async function clearTitle(id: number, type: MediaType) {
 export async function getDeck(type: MediaType | "all", queued: string[]): Promise<MediaItem[]> {
   const { supabase, user } = await requireUser();
 
-  const [ratings, skips, watchlist, taste, genres] = await Promise.all([
+  const [ratings, skips, watchlist, passes, taste, genres] = await Promise.all([
     supabase.from("ratings").select("tmdb_id, media_type, rating").eq("user_id", user.id),
     supabase.from("skips").select("tmdb_id, media_type").eq("user_id", user.id),
     supabase.from("watchlist").select("tmdb_id, media_type").eq("user_id", user.id),
+    supabase.from("not_interested").select("tmdb_id, media_type").eq("user_id", user.id),
     computeTaste(supabase, user.id),
     genreNames().catch(() => new Map<number, string>()),
   ]);
 
   const seen = new Set(queued);
-  for (const r of [...(ratings.data ?? []), ...(skips.data ?? []), ...(watchlist.data ?? [])]) {
+  for (const r of [...(ratings.data ?? []), ...(skips.data ?? []), ...(watchlist.data ?? []), ...(passes.data ?? [])]) {
     seen.add(key(r.tmdb_id, r.media_type));
   }
 

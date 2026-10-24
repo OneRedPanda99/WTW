@@ -23,15 +23,18 @@ export async function recommendFor(
   userId: string,
   type: MediaType | "all",
 ): Promise<Recommendation[]> {
-  const [taste, ratings, watchlist, genres] = await Promise.all([
+  const [taste, ratings, watchlist, passes, genres] = await Promise.all([
     computeTaste(supabase, userId),
     supabase.from("ratings").select("tmdb_id, media_type, rating, title").eq("user_id", userId),
     supabase.from("watchlist").select("tmdb_id, media_type").eq("user_id", userId),
+    supabase.from("not_interested").select("tmdb_id, media_type").eq("user_id", userId),
     genreNames().catch(() => new Map<number, string>()),
   ]);
 
   const rated = ratings.data ?? [];
-  const exclude = new Set([...rated, ...(watchlist.data ?? [])].map((r) => key(r.tmdb_id, r.media_type)));
+  const exclude = new Set(
+    [...rated, ...(watchlist.data ?? []), ...(passes.data ?? [])].map((r) => key(r.tmdb_id, r.media_type)),
+  );
 
   // Seeds: everything you loved counts double; a few liked titles fill in.
   const shuffled = [...rated].sort(() => Math.random() - 0.5);

@@ -7,6 +7,7 @@ export type TasteFeature = { label: string; score: number; count: number };
 
 export type TasteProfile = {
   ratedCount: number;
+  notInterestedCount: number;
   genres: TasteFeature[];
   keywords: TasteFeature[];
   people: TasteFeature[];
@@ -15,36 +16,50 @@ export type TasteProfile = {
   weights: Record<string, number>;
 };
 
+/** "Not for me" counts as half a "didn't like": you never watched it, but you know you don't want to. */
+const NOT_INTERESTED_WEIGHT = -0.5;
+
 /**
- * Builds a taste profile from RATINGS ONLY. Watchlist items never count until
- * they're logged as watched (which moves them into ratings).
+ * Builds a taste profile from ratings plus "not for me" picks. Watchlist items
+ * never count until they're logged as watched (which moves them into ratings).
  *
- * Each rated title adds its rating (-1 / +1 / +2) to every feature it has.
+ * Each title adds its weight (-1 / +1 / +2, or -0.5 for "not for me") to every
+ * feature it has. Counts only include titles you actually watched.
  */
 export async function computeTaste(supabase: SupabaseClient, userId: string): Promise<TasteProfile> {
-  const { data: ratings } = await supabase
-    .from("ratings")
-    .select("tmdb_id, media_type, rating")
-    .eq("user_id", userId);
+  const [{ data: ratings }, { data: passes }] = await Promise.all([
+    supabase.from("ratings").select("tmdb_id, media_type, rating").eq("user_id", userId),
+    supabase.from("not_interested").select("tmdb_id, media_type").eq("user_id", userId),
+  ]);
 
-  const rows = (ratings ?? []) as { tmdb_id: number; media_type: MediaType; rating: Rating }[];
+  const rated = ((ratings ?? []) as { tmdb_id: number; media_type: MediaType; rating: Rating }[]).map((r) => ({
+    ...r,
+    weight: r.rating as number,
+    watched: true,
+  }));
+  const passed = ((passes ?? []) as { tmdb_id: number; media_type: MediaType }[]).map((r) => ({
+    ...r,
+    weight: NOT_INTERESTED_WEIGHT,
+    watched: false,
+  }));
+  const rows = [...rated, ...passed];
   const features = await loadFeatures(supabase, rows);
 
   const tally = new Map<string, { score: number; count: number }>();
-  const add = (k: string, w: number) => {
+  const add = (k: string, w: number, watched: boolean) => {
     const t = tally.get(k) ?? { score: 0, count: 0 };
     t.score += w;
-    t.count += 1;
+    if (watched) t.count += 1;
     tally.set(k, t);
   };
 
   for (const r of rows) {
     const f = features.get(`${r.media_type}:${r.tmdb_id}`);
     if (!f) continue;
-    new Set(f.genres.flatMap(normalizeGenre)).forEach((g) => add(`genre:${g}`, r.rating));
-    f.keywords.filter((k) => !JUNK_KEYWORDS.has(k)).forEach((k) => add(`keyword:${k}`, r.rating * 0.5));
-    f.people.forEach((p) => add(`person:${p}`, r.rating * 0.75));
-    if (f.year) add(`decade:${f.year.slice(0, 3)}0s`, r.rating * 0.5);
+    new Set(f.genres.flatMap(normalizeGenre)).forEach((g) => add(`genre:${g}`, r.weight, r.watched));
+    f.keywords.filter((k) => !JUNK_KEYWORDS.has(k)).forEach((k) => add(`keyword:${k}`, r.weight * 0.5, r.watched));
+    f.people.forEach((p) => add(`person:${p}`, r.weight * 0.75, r.watched));
+    if (f.year) add(`decade:${f.year.slice(0, 3)}0s`, r.weight * 0.5, r.watched);
   }
 
   const group = (prefix: string, minCount: number) =>
@@ -54,8 +69,9 @@ export async function computeTaste(supabase: SupabaseClient, userId: string): Pr
       .sort((a, b) => b.score - a.score);
 
   return {
-    ratedCount: rows.length,
-    genres: group("genre:", 1),
+    ratedCount: rated.length,
+    notInterestedCount: passed.length,
+    genres: group("genre:", 0), // 0 so genres you only ever passed on still show up as dislikes
     keywords: group("keyword:", 2),
     people: group("person:", 2),
     decades: group("decade:", 1),

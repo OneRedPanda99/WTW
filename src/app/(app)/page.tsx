@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import Poster from "@/components/Poster";
-import RateButtons from "@/components/RateButtons";
 import { recommendFor } from "@/lib/forYou";
 import { requireUser } from "@/lib/supabase/server";
 import type { MediaType } from "@/lib/types";
+import RecCard from "./RecCard";
 
 export const metadata = { title: "For You · WTW?" };
 
@@ -85,17 +84,7 @@ async function Recommendations({ userId, type }: { userId: string; type: MediaTy
   return (
     <ul className="mt-6 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
       {recs.map(({ item, reasons }) => (
-        <li key={`${item.media_type}:${item.id}`} className="flex flex-col">
-          <Poster path={item.poster_path} title={item.title} sizes="(max-width: 640px) 50vw, 200px" />
-          <p className="mt-2 font-semibold leading-tight">{item.title}</p>
-          <p className="text-xs text-zinc-500">
-            {item.year ?? "—"} · {item.media_type === "tv" ? "TV" : "Movie"} · ★ {item.vote_average.toFixed(1)}
-          </p>
-          {reasons.length > 0 && <p className="mt-1 line-clamp-2 text-xs text-amber-300/90">{reasons.join(" · ")}</p>}
-          <div className="mt-2">
-            <RateButtons compact item={item} />
-          </div>
-        </li>
+        <RecCard key={`${item.media_type}:${item.id}`} item={item} reasons={reasons} />
       ))}
     </ul>
   );

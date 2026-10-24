@@ -11,7 +11,7 @@ export const metadata = { title: "Profile · WTW?" };
 export default async function ProfilePage() {
   const { supabase, user } = await requireUser();
 
-  const [{ data: profile }, { data: ratings }, taste] = await Promise.all([
+  const [{ data: profile }, { data: ratings }, { data: passes }, taste] = await Promise.all([
     supabase.from("profiles").select("display_name").eq("id", user.id).single(),
     supabase
       .from("ratings")
@@ -19,8 +19,15 @@ export default async function ProfilePage() {
       .eq("user_id", user.id)
       .order("rated_at", { ascending: false })
       .limit(60),
+    supabase
+      .from("not_interested")
+      .select("tmdb_id, media_type, title, poster_path")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(60),
     computeTaste(supabase, user.id),
   ]);
+  const notForMe = (passes ?? []) as { tmdb_id: number; media_type: MediaType; title: string; poster_path: string | null }[];
 
   const rated = (ratings ?? []) as {
     tmdb_id: number;
@@ -53,8 +60,9 @@ export default async function ProfilePage() {
       <section>
         <h2 className="text-xl font-bold">Your taste</h2>
         <p className="mt-1 text-sm text-zinc-400">
-          Built from the {taste.ratedCount} title{taste.ratedCount === 1 ? "" : "s"} you&apos;ve rated. Watchlist
-          items aren&apos;t included.
+          Built from the {taste.ratedCount} title{taste.ratedCount === 1 ? "" : "s"} you&apos;ve rated
+          {taste.notInterestedCount > 0 && ` and ${taste.notInterestedCount} marked "not for me"`}. Watchlist items
+          aren&apos;t included.
         </p>
 
         {taste.ratedCount < 5 ? (
@@ -98,6 +106,30 @@ export default async function ProfilePage() {
           </ul>
         )}
       </section>
+
+      {notForMe.length > 0 && (
+        <section>
+          <h2 className="text-xl font-bold">Not for you</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Things you passed on. They count a little against similar titles. Tap 🚫 to take one back.
+          </p>
+          <ul className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-8">
+            {notForMe.map((r) => (
+              <li key={`${r.media_type}:${r.tmdb_id}`} className="opacity-80">
+                <Poster path={r.poster_path} title={r.title} size="w185" sizes="(max-width: 640px) 33vw, 120px" />
+                <p className="mt-1 truncate text-xs">{r.title}</p>
+                <div className="mt-1">
+                  <RateButtons
+                    compact
+                    notInterested
+                    item={{ id: r.tmdb_id, media_type: r.media_type, title: r.title, poster_path: r.poster_path }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

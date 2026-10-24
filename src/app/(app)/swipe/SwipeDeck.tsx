@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Poster from "@/components/Poster";
-import { addToWatchlist, clearTitle, getDeck, rateTitle, skipTitle } from "@/app/actions";
+import { addToWatchlist, clearTitle, getDeck, markNotInterested, rateTitle, skipTitle } from "@/app/actions";
 import type { MediaItem, MediaType, Rating } from "@/lib/types";
 
-type Choice = Rating | "skip" | "watchlist";
+type Choice = Rating | "skip" | "watchlist" | "pass";
 type Filter = MediaType | "all";
 
 const CHOICE_TEXT: Record<string, string> = {
@@ -14,7 +14,11 @@ const CHOICE_TEXT: Record<string, string> = {
   "2": "Loved",
   skip: "Haven't seen",
   watchlist: "Added to watchlist",
+  pass: "Not for me",
 };
+
+// The deck updates itself, so saves don't need to re-render the page.
+const QUIET = { quiet: true };
 
 const SWIPE_THRESHOLD = 110;
 
@@ -81,8 +85,10 @@ export default function SwipeDeck({ initial }: { initial: MediaItem[] | null }) 
         choice === "skip"
           ? skipTitle(current)
           : choice === "watchlist"
-            ? addToWatchlist(current)
-            : rateTitle(current, choice);
+            ? addToWatchlist(current, QUIET)
+            : choice === "pass"
+              ? markNotInterested(current, QUIET)
+              : rateTitle(current, choice, QUIET);
       save.catch(() => setError(`Couldn't save "${current.title}". Try undo and again.`));
     },
     [current, queue, history, filter, loadMore],
@@ -94,14 +100,21 @@ export default function SwipeDeck({ initial }: { initial: MediaItem[] | null }) 
     setHistory(rest);
     setQueue((q) => [last.item, ...q]);
     setCount((c) => Math.max(0, c - 1));
-    clearTitle(last.item.id, last.item.media_type).catch(() => {});
+    clearTitle(last.item.id, last.item.media_type, QUIET).catch(() => {});
   }, [history]);
 
   // Keyboard: ← didn't like, → liked, ↑ loved, ↓ haven't seen, W watchlist, Z undo.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement) return;
-      const map: Record<string, Choice> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: 2, ArrowDown: "skip", w: "watchlist" };
+      const map: Record<string, Choice> = {
+        ArrowLeft: -1,
+        ArrowRight: 1,
+        ArrowUp: 2,
+        ArrowDown: "skip",
+        w: "watchlist",
+        x: "pass",
+      };
       if (e.key in map) {
         e.preventDefault();
         choose(map[e.key]);
@@ -219,30 +232,33 @@ export default function SwipeDeck({ initial }: { initial: MediaItem[] | null }) 
         <DeckButton onClick={() => choose(1)} disabled={!current} className="border-green-500/40 text-green-300">
           👍 Liked
         </DeckButton>
-        <DeckButton onClick={() => choose("skip")} disabled={!current} className="col-span-1">
+        <DeckButton onClick={() => choose("skip")} disabled={!current}>
           Haven&apos;t seen
+        </DeckButton>
+        <DeckButton onClick={() => choose("pass")} disabled={!current} className="text-zinc-400">
+          🚫 Not for me
         </DeckButton>
         <DeckButton onClick={() => choose("watchlist")} disabled={!current} className="border-amber-500/40 text-amber-300">
           + Watchlist
         </DeckButton>
-        <DeckButton onClick={undo} disabled={history.length === 0}>
-          ↩ Undo
-        </DeckButton>
       </div>
 
-      {history[0] && (
-        <p className="mt-3 text-sm text-zinc-500">
-          {history[0].item.title}: {CHOICE_TEXT[String(history[0].choice)]}
-        </p>
-      )}
+      <div className="mt-3 flex min-h-5 w-full items-center justify-between gap-3 text-sm text-zinc-500">
+        <span className="truncate">
+          {history[0] && `${history[0].item.title}: ${CHOICE_TEXT[String(history[0].choice)]}`}
+        </span>
+        <button onClick={undo} disabled={history.length === 0} className="shrink-0 hover:text-zinc-200 disabled:opacity-30">
+          ↩ Undo
+        </button>
+      </div>
       {error && current && <p className="mt-2 text-sm text-red-400">{error}</p>}
 
       <p className="mt-6 hidden text-center text-xs text-zinc-600 sm:block">
-        Keys: ← didn&apos;t like · → liked · ↑ loved · ↓ haven&apos;t seen · W watchlist · Z undo
+        Keys: ← didn&apos;t like · → liked · ↑ loved · ↓ haven&apos;t seen · X not for me · W watchlist · Z undo
       </p>
       <p className="mt-2 text-center text-xs text-zinc-600">
-        Only titles you&apos;ve actually watched (liked / loved / didn&apos;t like) shape your taste. Watchlist and
-        &ldquo;haven&apos;t seen&rdquo; don&apos;t.
+        Ratings shape your taste, and &ldquo;not for me&rdquo; counts a little against similar things. Watchlist and
+        &ldquo;haven&apos;t seen&rdquo; don&apos;t count.
       </p>
     </div>
   );

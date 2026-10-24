@@ -15,6 +15,7 @@ type MemberData = {
   taste: TasteProfile;
   ratings: Map<string, { rating: Rating; title: string }>;
   watchlist: Set<string>;
+  notInterested: Set<string>;
 };
 
 const key = (id: number, type: MediaType) => `${type}:${id}`;
@@ -31,7 +32,8 @@ const key = (id: number, type: MediaType) => `${type}:${id}`;
  *  - recommended from something they liked
  *  - already seen it and loved/liked it (good rewatch / "you have to see this")
  *
- * Skipped: anything someone disliked, and anything EVERYONE has already seen.
+ * Skipped: anything someone disliked or marked "not for me", and anything
+ * EVERYONE has already seen.
  */
 export async function groupPicks(supabase: SupabaseClient, members: Member[], type: MediaType | "all"): Promise<GroupPick[]> {
   const data = await Promise.all(members.map((m) => loadMember(supabase, m)));
@@ -90,6 +92,7 @@ export async function groupPicks(supabase: SupabaseClient, members: Member[], ty
   for (const [k, item] of candidates) {
     const seenBy = data.filter((d) => d.ratings.has(k));
     if (seenBy.some((d) => d.ratings.get(k)!.rating < 0)) continue; // someone disliked it
+    if (data.some((d) => d.notInterested.has(k))) continue; // someone said "not for me"
     if (seenBy.length === data.length) continue; // everyone has seen it
 
     const itemGenres = [...new Set(item.genre_ids.flatMap((id) => normalizeGenre(genres.get(id) ?? "")))].filter(Boolean);
@@ -135,16 +138,18 @@ function diversify(sorted: GroupPick[], recSources: Map<string, { from: string }
 }
 
 async function loadMember(supabase: SupabaseClient, member: Member): Promise<MemberData> {
-  const [taste, r, w] = await Promise.all([
+  const [taste, r, w, n] = await Promise.all([
     computeTaste(supabase, member.id),
     supabase.from("ratings").select("tmdb_id, media_type, rating, title").eq("user_id", member.id),
     supabase.from("watchlist").select("tmdb_id, media_type").eq("user_id", member.id),
+    supabase.from("not_interested").select("tmdb_id, media_type").eq("user_id", member.id),
   ]);
   return {
     member,
     taste,
     ratings: new Map((r.data ?? []).map((x) => [key(x.tmdb_id, x.media_type), { rating: x.rating as Rating, title: x.title }])),
     watchlist: new Set((w.data ?? []).map((x) => key(x.tmdb_id, x.media_type))),
+    notInterested: new Set((n.data ?? []).map((x) => key(x.tmdb_id, x.media_type))),
   };
 }
 
