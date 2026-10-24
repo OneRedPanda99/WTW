@@ -62,11 +62,76 @@ export function posterUrl(path: string | null, size: "w185" | "w342" | "w500" = 
   return path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
 }
 
-export async function searchTitles(query: string): Promise<MediaItem[]> {
-  const data = await tmdb<{ results: RawResult[] }>("/search/multi", { query, include_adult: "false" });
-  return data.results
-    .map((r) => toItem(r, "movie"))
-    .filter((x): x is MediaItem => x !== null);
+export type PersonResult = {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  known_for_department: string;
+  known_for: string[];
+};
+
+/** Searches movies, shows and people (actors, directors) in one go. */
+export async function search(query: string): Promise<{ titles: MediaItem[]; people: PersonResult[] }> {
+  type Raw = RawResult & {
+    profile_path?: string | null;
+    known_for_department?: string;
+    known_for?: RawResult[];
+    popularity?: number;
+  };
+  const data = await tmdb<{ results: Raw[] }>("/search/multi", { query, include_adult: "false" });
+
+  const people = data.results
+    .filter((r) => r.media_type === "person" && (r.popularity ?? 0) > 1)
+    .slice(0, 6)
+    .map((r) => ({
+      id: r.id,
+      name: r.name ?? "Unknown",
+      profile_path: r.profile_path ?? null,
+      known_for_department: r.known_for_department ?? "",
+      known_for: (r.known_for ?? []).map((k) => k.title ?? k.name ?? "").filter(Boolean).slice(0, 3),
+    }));
+
+  const titles = data.results.map((r) => toItem(r, "movie")).filter((x): x is MediaItem => x !== null);
+  return { titles, people };
+}
+
+export type Credit = MediaItem & { role: string };
+
+// Talk shows, news and award shows: someone "appearing as themselves" isn't a movie they're in.
+const NOT_REALLY_IN_IT = new Set([10763, 10767, 10764]);
+
+/** A person's details and the movies / shows they acted in or directed, best known first. */
+export async function personCredits(id: number) {
+  type CreditRaw = RawResult & { character?: string; job?: string; episode_count?: number };
+  const p = await tmdb<{
+    name: string;
+    profile_path: string | null;
+    known_for_department: string;
+    biography: string;
+    combined_credits: { cast: CreditRaw[]; crew: CreditRaw[] };
+  }>(`/person/${id}`, { append_to_response: "combined_credits" });
+
+  const byKey = new Map<string, Credit>();
+  const add = (r: CreditRaw, role: string) => {
+    const item = toItem(r, "movie");
+    if (!item || !item.poster_path || r.adult) return;
+    if (item.genre_ids.some((g) => NOT_REALLY_IN_IT.has(g))) return;
+    if (/\b(self|himself|herself|narrator \(voice\))\b/i.test(role)) return;
+    const k = `${item.media_type}:${item.id}`;
+    const existing = byKey.get(k);
+    if (existing) existing.role = `${existing.role} · ${role}`;
+    else byKey.set(k, { ...item, role });
+  };
+  p.combined_credits.cast.forEach((c) => add(c, c.character ? `as ${c.character}` : "Cast"));
+  p.combined_credits.crew.filter((c) => c.job === "Director" || c.job === "Creator").forEach((c) => add(c, c.job!));
+
+  return {
+    name: p.name,
+    profile_path: p.profile_path,
+    known_for_department: p.known_for_department,
+    biography: p.biography,
+    credits: [...byKey.values()].sort((a, b) => b.vote_count - a.vote_count),
+  };
 }
 
 // Minimum TMDB vote counts for the swipe pool: enough that most people have heard of it.
@@ -89,6 +154,12 @@ export async function popularPool(type: MediaType | "all"): Promise<MediaItem[]>
 /** TMDB's "people who watched X also watched" list. */
 export async function recommendationsFor(id: number, type: MediaType): Promise<MediaItem[]> {
   return list(`/${type}/${id}/recommendations`, type);
+}
+
+/** Card-level info for one title (used for watchlist items, which we only store ids for). */
+export async function titleDetails(id: number, type: MediaType): Promise<MediaItem | null> {
+  const d = await tmdb<RawResult & { genres?: { id: number }[] }>(`/${type}/${id}`);
+  return toItem({ ...d, genre_ids: (d.genres ?? []).map((g) => g.id) }, type);
 }
 
 /** TMDB genre id → name, for both movies and TV. */

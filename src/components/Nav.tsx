@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/swipe", label: "Swipe", icon: "🃏" },
+  { href: "/together", label: "Together", icon: "💑" },
   { href: "/watchlist", label: "Watchlist", icon: "🍿" },
   { href: "/search", label: "Search", icon: "🔎" },
   { href: "/profile", label: "Profile", icon: "🙂" },
@@ -34,7 +35,7 @@ export default function Nav() {
         </nav>
       </header>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-zinc-800 bg-zinc-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-zinc-800 bg-zinc-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
         {LINKS.map((l) => (
           <Link
             key={l.href}

@@ -23,9 +23,13 @@ export default async function Home() {
         <HomeCard href="/search" emoji="🔎" title="Search" text="Find a specific movie or show to rate or save." />
       </div>
 
-      <div className="mt-6 rounded-xl border border-dashed border-zinc-800 p-5 text-sm text-zinc-500">
-        Coming next: pick a partner and get picks you&apos;ll both like.
-      </div>
+      <Link
+        href="/together"
+        className="mt-4 block rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5 transition hover:-translate-y-0.5 hover:bg-zinc-900"
+      >
+        <h2 className="text-lg font-bold">💑 Watch together</h2>
+        <p className="mt-1 text-sm text-zinc-400">Pick who&apos;s watching and get things you&apos;ll all like.</p>
+      </Link>
     </div>
   );
 }
